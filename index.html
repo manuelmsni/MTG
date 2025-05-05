@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Buscador de Cartas MTG</title>
+    <link rel="stylesheet" href="main.css">
+</head>
+
+<body>
+
+    <div id="header">
+        <div class="autocomplete">
+            <input type="text" id="search" placeholder="Ej: black lotus" />
+            <button id="searchBtn" title="Buscar">&#128269;</button>
+            <div id="suggestions" class="suggestions"></div>
+        </div>
+    </div>
+
+    <div id="body">
+        <div id="cardsSelected">
+        </div>
+
+        <div id="cardLibraryContainer">
+            <h3>Your library</h3>
+            <div id="filters" style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                <label for="deckFilter">Deck:</label>
+                <select id="deckFilter" style="width: fit-content;" onchange="renderLibraryTable(this.value)"></select>
+            </div>
+            <div id="cardLibrary"></div>
+        </div>
+    </div>
+
+    <div id="previewImg" class="preview-img"></div>
+
+    <div id="overlay" style="display: none;"></div>
+
+    <div id="importModal" style="display: none;">
+        <h3>Import library</h3>
+        <select id="importOption">
+            <option value="">Selecciona una opción...</option>
+            <option value="csv">CSV File</option>
+            <option value="sheets">Google Sheets</option>
+        </select>
+        <div id="csvUpload" style="margin-top: 1rem; display: none;">
+            <input type="file" id="csvFileInput" accept=".csv" />
+        </div>
+        <div id="sheetsInput" style="margin-top: 1rem; display: none;">
+            <input type="text" id="sheetUrl" placeholder="Sheet link" />
+            <button id="loadBtn" onclick="loadFromGoogleSheets()">Cargar</button>
+        </div>
+        <!-- Botón cancelar -->
+        <button id="cancelBtn">Cancelar</button>
+    </div>
+
+    <button id="saveCsvBtn" class="boton-flotante">💾</button>
+
+    <script>
+        // Estado global
+        const state = {
+            cardsOwned: {},
+            cardsInStage: {},
+            cardsDataCache: {},
+            decks: {}
+        };
+
+        // Referencias DOM
+        const dom = {
+            input: document.getElementById("search"),
+            suggestionsBox: document.getElementById("suggestions"),
+            searchBtn: document.getElementById("searchBtn"),
+            previewImg: document.getElementById("previewImg"),
+            cardsSelected: document.getElementById("cardsSelected"),
+            cardLibrary: document.getElementById("cardLibrary"),
+            deckFilter: document.getElementById("deckFilter"),
+            overlay: document.getElementById("overlay"),
+            importModal: document.getElementById("importModal"),
+            cancelBtn: document.getElementById("cancelBtn"),
+            saveCsvBtn: document.getElementById("saveCsvBtn")
+        };
+
+        async function fetchSuggestions(query) {
+            const url = `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query)}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        }
+
+        async function fetchCardData(name) {
+            if (state.cardsDataCache[name]) return state.cardsDataCache[name];
+            const url = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            state.cardsDataCache[name] = data;
+            return data;
+        }
+
+        async function handleSearch() {
+            const query = dom.input.value.trim();
+            if (!query) return clearSuggestions();
+
+            try {
+                const { data: suggestions } = await fetchSuggestions(query);
+                renderSuggestions(suggestions);
+            } catch (err) {
+                console.error("Error al obtener sugerencias:", err);
+                dom.suggestionsBox.innerHTML = "<div style='padding: 8px; color: red;'>Error al cargar sugerencias</div>";
+            }
+        }
+
+
+        function renderSuggestions(suggestions) {
+            dom.suggestionsBox.innerHTML = "";
+
+            suggestions.forEach(suggestion => {
+                const div = document.createElement("div");
+                div.className = "suggestion";
+                div.textContent = `${suggestion} (${state.cardsOwned[suggestion] ? state.cardsOwned[suggestion].length : 0})`;
+
+                if (state.cardsInStage[suggestion]) {
+                    div.style.backgroundColor = "#ddd";
+                    div.style.cursor = "not-allowed";
+                }
+
+                div.onclick = () => {
+                    dom.previewImg.style.display = "none";
+                    showCardPreview(suggestion);
+                    clearSuggestions();
+                };
+
+                div.onmouseover = () => {
+                    showPreview(suggestion);
+                }
+
+                dom.suggestionsBox.appendChild(div);
+            });
+        }
+
+        function clearSuggestions() {
+            dom.suggestionsBox.innerHTML = "";
+        }
+
+        var clearPreview = null;
+
+        async function showPreview(name) {
+            try {
+                const data = await fetchCardData(name);
+                if (data.image_uris) {
+                    const img = document.createElement("img");
+                    img.src = data.image_uris.normal;
+                    img.style.maxWidth = "200px";
+                    img.style.maxHeight = "300px";
+
+                    dom.previewImg.innerHTML = "";
+                    dom.previewImg.appendChild(img);
+                    dom.previewImg.style.display = "block";
+
+                    if (!clearPreview) {
+                        clearPreview = (e) => {
+                            if (e.target.closest(".suggestion") === null) {
+                                dom.previewImg.style.display = "none";
+                                document.body.removeEventListener("mouseover", clearPreview);
+                                clearPreview = null;
+                            }
+                        };
+                        document.body.addEventListener("mouseover", clearPreview);
+                    }
+
+                }
+            } catch (err) {
+                console.error("Error al mostrar la imagen de la carta:", err);
+                dom.previewImg.style.display = "none";
+            }
+        }
+
+        async function showCardPreview(name) {
+            if (state.cardsInStage[name]) return;
+
+            try {
+                const cardData = await fetchCardData(name);
+                state.cardsInStage[name] = cardData;
+
+                const cardDiv = document.createElement("div");
+                cardDiv.className = "card-preview";
+                cardDiv.id = `card-${name}`;
+
+
+                const cardHeader = document.createElement("div");
+                cardHeader.className = "card-preview-header";
+                const title = document.createElement("h4");
+                title.textContent = cardData.name;
+
+                const unstageCardButton = document.createElement("button");
+                unstageCardButton.textContent = "-";
+                unstageCardButton.className = "minimize";
+                unstageCardButton.onclick = () => {
+                    cardDiv.remove();
+                    state.cardsInStage[name] = null;
+                };
+
+                cardHeader.appendChild(title);
+                cardHeader.appendChild(unstageCardButton);
+
+                cardDiv.appendChild(cardHeader);
+
+                const cardBody = document.createElement("div");
+                cardBody.className = "card-preview-body";
+
+                const cardInfoContainer = document.createElement("div");
+                cardInfoContainer.className = "card-info-container";
+
+                const cardTableContainer = document.createElement("div");
+                cardTableContainer.id = `table-${name}`;
+                cardTableContainer.className = "card-table-container";
+
+                const img = document.createElement("img");
+                img.src = cardData.image_uris.normal;
+                img.style.maxWidth = "100px";
+                img.style.maxHeight = "150px";
+
+                const inputWrapper = document.createElement("div");
+                inputWrapper.style.display = "flex";
+                inputWrapper.style.alignItems = "center";
+
+                const minusBtn = document.createElement("button");
+                minusBtn.textContent = "-";
+                minusBtn.onclick = () => removeCardFromLibrary(name);
+
+                const input = document.createElement("input");
+                input.type = "number";
+                input.value = state.cardsOwned[name] ? state.cardsOwned[name].length : 0;
+                input.style.width = "40px";
+                input.disabled = true;
+
+                const plusBtn = document.createElement("button");
+                plusBtn.textContent = "+";
+                plusBtn.onclick = () => addCardToLibrary(name);
+
+                inputWrapper.appendChild(minusBtn);
+                inputWrapper.appendChild(input);
+                inputWrapper.appendChild(plusBtn);
+
+
+                cardInfoContainer.appendChild(img);
+                cardInfoContainer.appendChild(inputWrapper);
+
+                cardBody.appendChild(cardInfoContainer);
+                cardBody.appendChild(cardTableContainer);
+                cardDiv.appendChild(cardBody);
+                dom.cardsSelected.appendChild(cardDiv);
+
+                renderCardTable(name);
+
+            } catch (err) {
+                console.error("Error al agregar la carta:", err);
+            }
+        }
+
+        function addCardToLibrary(name) {
+            const newCard = { id: Date.now(), name: name, deck: null };
+            if (!state.cardsOwned[name]) state.cardsOwned[name] = [];
+            state.cardsOwned[name].push(newCard);
+
+            updateCardCountInStage(name);
+            renderCardTable(name);
+            renderLibraryTable();
+        }
+
+        function removeCardFromLibrary(name) {
+            const cards = state.cardsOwned[name];
+            if (!cards || cards.length === 0) return;
+
+            const index = cards.findIndex(card => !card.deck);
+
+            if (index !== -1) {
+                cards.splice(index, 1);
+            } else {
+                const card = cards[0];
+                const confirmar = confirm(`La carta "${name}" está asociada a la deck "${card.deck}". ¿Deseas eliminarla de todas formas?`);
+                if (!confirmar) return;
+                cards.shift();
+            }
+
+            updateCardCountInStage(name);
+            renderCardTable(name);
+            renderLibraryTable();
+        }
+
+        function updateCardCountInStage(name) {
+            const cardDiv = document.getElementById(`card-${name}`);
+            if (!cardDiv) return;
+
+            const input = cardDiv.querySelector("input");
+            input.value = state.cardsOwned[name] ? state.cardsOwned[name].length : 0;
+        }
+
+        function renderCardTable(name) {
+            const tableDiv = document.getElementById(`table-${name}`);
+            if (!tableDiv) return;
+
+            const oldTable = tableDiv.querySelector("table");
+            if (oldTable) tableDiv.removeChild(oldTable);
+
+            if (state.cardsOwned[name] && state.cardsOwned[name].length > 0) {
+                const table = document.createElement("table");
+                table.className = "card-table";
+                const thead = document.createElement("thead");
+                thead.innerHTML = `
+            <tr>
+                <th>ID</th>
+                <th>Deck</th>
+                <th>Lang</th>
+                <th>Style</th>
+                <th></th>
+            </tr>`;
+                table.appendChild(thead);
+
+                const tbody = document.createElement("tbody");
+
+                state.cardsOwned[name].forEach((cardObj, index) => {
+                    const row = document.createElement("tr");
+
+                    const idCell = document.createElement("td");
+                    idCell.textContent = cardObj.id;
+
+                    const deckCell = document.createElement("td");
+                    deckCell.textContent = cardObj.deck || "(ninguna)";
+                    deckCell.style.cursor = "pointer";
+                    deckCell.style.color = "blue";
+                    deckCell.onclick = () => showDeckSelector(name, index, deckCell);
+
+                    const langCell = document.createElement("td");
+                    const langSelect = document.createElement("select");
+                    ["EN", "ES"].forEach(lang => {
+                        const option = document.createElement("option");
+                        option.value = lang;
+                        option.textContent = lang;
+                        if (cardObj.lang === lang) option.selected = true;
+                        langSelect.appendChild(option);
+                    });
+                    langSelect.onchange = () => {
+                        cardObj.lang = langSelect.value;
+                    };
+                    langCell.appendChild(langSelect);
+
+                    const styleCell = document.createElement("td");
+                    const styleSelect = document.createElement("select");
+
+                    const styleOptions = [
+                        { value: "b", label: "basic" },
+                        { value: "f", label: "foil" },
+                        { value: "fa", label: "fullart" },
+                        { value: "faf", label: "fullart foil" }
+                    ];
+
+                    styleOptions.forEach(style => {
+                        const option = document.createElement("option");
+                        option.value = style.value;
+                        option.textContent = style.label;
+                        if (cardObj.style === style.value) option.selected = true;
+                        styleSelect.appendChild(option);
+                    });
+
+                    styleSelect.onchange = () => {
+                        cardObj.style = styleSelect.value;
+                    };
+                    styleCell.appendChild(styleSelect);
+
+                    const removeCell = document.createElement("td");
+                    removeCell.style.boxShadow = "none";
+                    const removeBtn = document.createElement("button");
+                    removeBtn.textContent = "X";
+                    removeBtn.className = "delete";
+                    removeBtn.onclick = () => {
+                        let eliminar = true;
+                        if (cardObj.deck) {
+                            eliminar = confirm(`¿Estás seguro de que deseas eliminar la carta "${cardObj.name}"?`);
+                        }
+
+                        if (eliminar) {
+                            removeCardFromLibrary(name);
+                            row.remove();
+                            renderLibraryTable();
+                        }
+                    };
+                    removeCell.appendChild(removeBtn);
+
+                    row.appendChild(idCell);
+                    row.appendChild(deckCell);
+                    row.appendChild(langCell);
+                    row.appendChild(styleCell);
+                    row.appendChild(removeCell);
+
+                    tbody.appendChild(row);
+                });
+
+                table.appendChild(tbody);
+                tableDiv.appendChild(table);
+            }
+        }
+
+        function showDeckSelector(cardName, cardIndex, deckCell) {
+            const existingPopup = document.querySelector(".deck-popup");
+            if (existingPopup) existingPopup.remove();
+
+            const selector = document.createElement("div");
+            selector.className = "deck-popup";
+            selector.style.position = "absolute";
+            selector.style.background = "white";
+            selector.style.border = "1px solid #ccc";
+            selector.style.padding = "8px";
+            selector.style.zIndex = 1000;
+
+            const rect = deckCell.getBoundingClientRect();
+            selector.style.top = `${rect.bottom + window.scrollY}px`;
+            selector.style.left = `${rect.left + window.scrollX}px`;
+
+            const decks = Object.keys(state.decks);
+
+            const noneOption = document.createElement("div");
+            noneOption.textContent = "(ninguna)";
+            noneOption.style.cursor = "pointer";
+            noneOption.style.padding = "4px";
+            noneOption.onclick = (e) => {
+                e.stopPropagation();
+                state.cardsOwned[cardName][cardIndex].deck = null;
+                deckCell.textContent = "(ninguna)";
+                selector.remove();
+                renderLibraryTable();
+            };
+            selector.appendChild(noneOption);
+
+
+            decks.forEach(deckName => {
+                const option = document.createElement("div");
+                option.textContent = deckName;
+                option.style.cursor = "pointer";
+                option.style.padding = "4px";
+                option.onclick = (e) => {
+                    e.stopPropagation();
+                    state.cardsOwned[cardName][cardIndex].deck = deckName;
+                    deckCell.textContent = deckName;
+                    selector.remove();
+                    renderLibraryTable();
+                };
+                selector.appendChild(option);
+            });
+
+            const newDeckOption = document.createElement("div");
+            newDeckOption.textContent = "➕ Nueva deck…";
+            newDeckOption.style.cursor = "pointer";
+            newDeckOption.style.color = "green";
+            newDeckOption.style.padding = "4px";
+            newDeckOption.onclick = (e) => {
+                e.stopPropagation();
+                const newDeckName = prompt("Nombre de la nueva deck:");
+                if (newDeckName) {
+                    state.decks[newDeckName] = true;
+                    state.cardsOwned[cardName][cardIndex].deck = newDeckName;
+                    deckCell.textContent = newDeckName;
+                    renderLibraryTable();
+                }
+                selector.remove();
+            };
+            selector.appendChild(newDeckOption);
+
+            document.body.appendChild(selector);
+
+            setTimeout(() => {
+                function handleClickOutside(event) {
+                    if (selector && !selector.contains(event.target)) {
+                        selector.remove();
+                        document.removeEventListener("click", handleClickOutside);
+                    }
+                }
+
+                document.addEventListener("click", handleClickOutside);
+            }, 0);
+        }
+
+        document.getElementById("importOption").addEventListener("change", (e) => {
+            document.getElementById("csvUpload").style.display = "none";
+            document.getElementById("sheetsInput").style.display = "none";
+
+            if (e.target.value === "csv") {
+                document.getElementById("csvUpload").style.display = "block";
+            } else if (e.target.value === "sheets") {
+                document.getElementById("sheetsInput").style.display = "block";
+            }
+        });
+
+        document.getElementById("csvFileInput").addEventListener("change", function () {
+            const file = this.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                renderLibraryFromCsv(e.target.result);
+            };
+            reader.readAsText(file);
+        });
+
+
+        function renderLibraryFromCsv(csv) {
+            var imported = false;
+            const cards = cardsFromCsv(csv);
+
+            if (cards || cards.length > 0) {
+                extractDeckNamesFromCArds(cards);
+                state.cardsOwned = cards;
+                renderLibraryTable();
+                imported = true;
+            }
+
+            document.getElementById("importModal").style.display = "none";
+            document.getElementById("overlay").style.display = "none";
+
+            return imported;
+        }
+
+        function cardsFromCsv(csvFileContent) {
+            const cards = {};
+            const lines = csvFileContent.split("\n").map(line => line.trim()).filter(line => line.length > 0);
+            lines.forEach(line => {
+                line = line.replace(/^"|"$/g, "");
+                const [name, id, deck, lang, style] = line.split(";");
+                const trimmedName = name?.trim();
+                if (!trimmedName) return;
+                if (!cards[trimmedName]) cards[trimmedName] = [];
+                var card = { id: parseInt(id), name: trimmedName, deck: deck?.trim() || null, lang: lang?.trim() || "EN" , style: style?.trim() || "b" };
+                if (card.deck == '(ninguna)') card.deck = null;
+                cards[trimmedName].push(card);
+            });
+            return cards;
+        }
+
+        function extractDeckNamesFromCArds(cards) {
+            Object.values(cards).forEach(cardArray => {
+                cardArray.forEach(card => {
+                    if (card.deck && !state.decks[card.deck]) {
+                        state.decks[card.deck] = true;
+                    }
+                });
+            });
+        }
+
+        function loadFromGoogleSheets() {
+            const url = document.getElementById("sheetUrl").value.trim();
+            if (!url) return alert("Proporciona un enlace válido.");
+            var sheetId = url.split("/d/")[1].split("/")[0];
+            var sheetGID = url.split("gid=")[1] || 0;
+            fetchGoogleSheetsCSV(sheetId, sheetGID)
+        }
+
+        async function fetchGoogleSheetsCSV(sheetId, sheetGID = 0) {
+            const targetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${sheetGID}`;
+            try {
+                const response = await fetch(targetUrl);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const csv = await response.text();
+                const importResult = renderLibraryFromCsv(csv);
+
+                return importResult === true;
+            } catch (error) {
+                console.error('Error al cargar el CSV:', error);
+                return false;
+            }
+        }
+
+        function saveCardsToCSV() {
+            const cardsOwnedArray = Object.keys(state.cardsOwned).map(cardName => {
+                const cardData = state.cardsOwned[cardName];
+                return cardData.map(card => `${card.name};${card.id};${card.deck || "(ninguna)"};${card.lang || "EN"};${card.style || "b"}`).join("\n");
+            }).join("\n");
+
+            const csvContent = cardsOwnedArray;
+
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "cartas_seleccionadas.csv");
+                link.style.visibility = "hidden";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        function renderLibraryFilterOptions() {
+            const decks = Object.keys(state.decks);
+            const select = document.getElementById("deckFilter");
+            const currenSelectedValueBuffer = select.value;
+
+            select.innerHTML = "";
+
+            if (decks.length === 0) {
+                select.style.display = "none";
+            } else {
+                select.style.display = "block";
+
+                const allOption = document.createElement("option");
+                allOption.value = "__ALL__";
+                allOption.textContent = "-";
+                select.appendChild(allOption);
+
+                const noneOption = document.createElement("option");
+                noneOption.value = "__NONE__";
+                noneOption.textContent = "(ninguna)";
+                select.appendChild(noneOption);
+
+                decks.forEach(deck => {
+                    const option = document.createElement("option");
+                    option.value = deck;
+                    option.textContent = deck;
+                    select.appendChild(option);
+                });
+
+                if (currenSelectedValueBuffer && select.querySelector(`option[value="${currenSelectedValueBuffer}"]`)) {
+                    select.value = currenSelectedValueBuffer;
+                } else {
+                    select.value = "__ALL__";
+                }
+            }
+        }
+
+        function renderLibraryTable(deckFilter = "__ALL__") {
+            renderLibraryFilterOptions();
+
+            dom.cardLibrary.innerHTML = "";
+
+            const grouped = {};
+
+            for (const cardName in state.cardsOwned) {
+                const cardArray = state.cardsOwned[cardName];
+                if (cardArray.length === 0) continue;
+
+                const filteredCards = cardArray.filter(card => {
+                    const deckName = card.deck;
+
+                    if (deckFilter === "__ALL__") {
+                        return true;
+                    } else if (deckFilter === "__NONE__") {
+                        return !deckName;
+                    } else {
+                        return deckName && deckName.toLowerCase() === deckFilter.toLowerCase();
+                    }
+                });
+
+                if (filteredCards.length === 0) continue;
+
+                if (!grouped[cardName]) {
+                    grouped[cardName] = [];
+                }
+                grouped[cardName] = grouped[cardName].concat(filteredCards);
+            }
+
+            if (Object.keys(grouped).length === 0) return;
+
+            const table = document.createElement("table");
+            table.className = "card-table";
+
+            const thead = document.createElement("thead");
+            thead.innerHTML = "<tr><th>Card</th><th>Count</th><th>Decks</th></tr>";
+            table.appendChild(thead);
+
+            const tbody = document.createElement("tbody");
+
+            for (const cardName in grouped) {
+                const cards = grouped[cardName];
+                const count = cards.length;
+
+                const deckCounts = {};
+                cards.forEach(card => {
+                    const deck = card.deck || "sin deck";
+                    deckCounts[deck] = (deckCounts[deck] || 0) + 1;
+                });
+
+                const deckSummary = Object.entries(deckCounts)
+                    .map(([deck, qty]) => `${deck} (${qty})`)
+                    .join(", ");
+
+                const row = document.createElement("tr");
+
+                const nameCell = document.createElement("td");
+                nameCell.textContent = cardName;
+                nameCell.style.cursor = "pointer";
+                nameCell.addEventListener("click", () => showCardPreview(cardName));
+
+                const countCell = document.createElement("td");
+                countCell.textContent = count;
+
+                const deckCell = document.createElement("td");
+                deckCell.textContent = deckSummary;
+
+                row.appendChild(nameCell);
+                row.appendChild(countCell);
+                row.appendChild(deckCell);
+
+                tbody.appendChild(row);
+            }
+
+            table.appendChild(tbody);
+            dom.cardLibrary.appendChild(table);
+        }
+
+        dom.input.addEventListener("input", () => {
+            dom.input.value.endsWith(" ") ? handleSearch() : clearSuggestions();
+        });
+
+        dom.input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                handleSearch();
+            }
+        });
+
+        dom.searchBtn.addEventListener("click", handleSearch);
+
+        document.addEventListener("click", (e) => {
+            if (!e.target.closest(".autocomplete")) clearSuggestions();
+        });
+
+        document.addEventListener("mousemove", (e) => {
+            dom.previewImg.style.left = `${e.pageX + 10}px`;
+            dom.previewImg.style.top = `${e.pageY + 10}px`;
+        });
+
+        dom.overlay.addEventListener("click", () => {
+            closeImportModal();
+        });
+
+        dom.cancelBtn.addEventListener("click", () => {
+            closeImportModal();
+        });
+
+        dom.saveCsvBtn.addEventListener("click", () => {
+            saveCardsToCSV();
+        });
+
+        function getUrlParam(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            window.addEventListener("load", () => {
+                const sheetId = getUrlParam('sheetId');
+                const sheetGID = getUrlParam('sheetGID') || 0;
+
+                if (sheetId) {
+                    fetchGoogleSheetsCSV(sheetId, sheetGID).then((importResult) => {
+                        if (importResult === true) {
+                            closeImportModal();
+                        } else {
+                            if (Object.keys(state.cardsOwned).length === 0) {
+                                showImportModal();
+                            }
+                        }
+                    });
+                }
+                else {
+                    if (Object.keys(state.cardsOwned).length === 0) {
+                        showImportModal();
+                    }
+                }
+
+
+            });
+        });
+
+        function showImportModal() {
+            dom.overlay.style.display = "block";
+            dom.importModal.style.display = "block";
+        }
+
+        function closeImportModal() {
+            dom.overlay.style.display = "none";
+            dom.importModal.style.display = "none";
+        }
+    </script>
+</body>
+
+</html>
