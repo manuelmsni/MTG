@@ -26,6 +26,8 @@
             <div id="filters" style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
                 <label for="deckFilter">Deck:</label>
                 <select id="deckFilter" style="width: fit-content;" onchange="renderLibraryTable(this.value)"></select>
+                <span>Card count:</span>
+                <span id="cardCount">0</span>
             </div>
             <div id="cardLibrary"></div>
         </div>
@@ -112,6 +114,7 @@
             deckTypeSelector: document.getElementById("deckTypeSelector"),
             createDeckBtn: document.getElementById("createDeckBtn"),
             cancelDeckCreationBtn: document.getElementById("cancelDeckCreationBtn"),
+            cardCount: document.getElementById("cardCount"),
         };
 
         function loadDeckTypeSelector() {
@@ -311,7 +314,8 @@
 
             updateCardCountInStage(name);
             renderCardTable(name);
-            renderLibraryTable();
+            var deckFilter = document.getElementById("deckFilter").value;
+            renderLibraryTable(deckFilter);
         }
 
         function removeCardFromLibrary(name) {
@@ -331,7 +335,8 @@
 
             updateCardCountInStage(name);
             renderCardTable(name);
-            renderLibraryTable();
+            var deckFilter = document.getElementById("deckFilter").value;
+            renderLibraryTable(deckFilter);
         }
 
         function updateCardCountInStage(name) {
@@ -437,7 +442,8 @@
                         if (eliminar) {
                             removeCardFromLibrary(name);
                             row.remove();
-                            renderLibraryTable();
+                            var deckFilter = document.getElementById("deckFilter").value;
+                            renderLibraryTable(deckFilter);
                         }
                     };
                     removeCell.appendChild(removeBtn);
@@ -481,7 +487,8 @@
                 state.cardsOwned[cardName][cardIndex].deck = null;
                 deckCell.textContent = "None";
                 selector.remove();
-                renderLibraryTable();
+                var deckFilter = document.getElementById("deckFilter").value;
+                renderLibraryTable(deckFilter);
             };
             selector.appendChild(noneOption);
 
@@ -496,7 +503,8 @@
                     state.cardsOwned[cardName][cardIndex].deck = deck.id;
                     deckCell.textContent = `${deck.name} (${deck.type})`;
                     selector.remove();
-                    renderLibraryTable();
+                    var deckFilter = document.getElementById("deckFilter").value;
+                    renderLibraryTable(deckFilter);
                 };
                 selector.appendChild(option);
             }
@@ -797,6 +805,8 @@
 
             dom.cardLibrary.innerHTML = "";
 
+            let cardsCount = 0;
+
             const grouped = {};
 
             for (const cardName in state.cardsOwned) {
@@ -877,10 +887,12 @@
                 row.appendChild(deckCell);
 
                 tbody.appendChild(row);
+                cardsCount += count;
             }
 
             table.appendChild(tbody);
             dom.cardLibrary.appendChild(table);
+            dom.cardCount.textContent = `${cardsCount}`;
         }
 
         dom.input.addEventListener("input", () => {
@@ -992,7 +1004,8 @@
                             if(card){
                                 card.deck = deck.id;
                                 renderCardTable(card.name);
-                                renderLibraryTable();
+                                var deckFilter = document.getElementById("deckFilter").value;
+                                renderLibraryTable(deckFilter);
                             }
                         }
                         closeDeckModal();
