@@ -49,22 +49,52 @@
             <input type="text" id="sheetUrl" placeholder="Sheet link" />
             <button id="loadBtn" onclick="loadFromGoogleSheets()">Cargar</button>
         </div>
-        <!-- Botón cancelar -->
         <button id="cancelBtn">Cancelar</button>
+    </div>
+
+    <div id="deckCreatorModal" style="display: none;">
+        <h3>New deck</h3>
+        <div id="deckNameInputContainer" style="margin-top: 1rem;">
+            <input type="text" id="deckNameInput" placeholder="Deck name" />
+        </div>
+        <div id="deckSelectorContainer" style="margin-top: 1rem;">
+            <label for="deckTypeSelector">Deck type:</label>
+            <select id="deckTypeSelector" style="width: fit-content;">
+            </select>
+        </div>
+        <button style="margin-top: 1rem;" id="createDeckBtn">Crear</button>
+        <button id="cancelDeckCreationBtn">Cancelar</button>
     </div>
 
     <button id="saveCsvBtn" class="boton-flotante">💾</button>
 
     <script>
-        // Estado global
+
         const state = {
-            cardsOwned: {},
-            cardsInStage: {},
+            deckTypes: [
+                "Standard",
+                "Commander",
+                "EDH",
+                "Modern",
+                "Legacy",
+                "Vintage",
+                "Pioneer",
+                "Brawl",
+                "Pauper",
+                "Historic",
+                "Penny Dreadful",
+                "Alchemy",
+                "Explorer",
+                "Frontier"
+            ],
             cardsDataCache: {},
-            decks: {}
+            cardsInStage: {},
+            decks: {},
+            cardsOwned: {},
+            wishList: {}
         };
 
-        // Referencias DOM
+
         const dom = {
             input: document.getElementById("search"),
             suggestionsBox: document.getElementById("suggestions"),
@@ -76,8 +106,25 @@
             overlay: document.getElementById("overlay"),
             importModal: document.getElementById("importModal"),
             cancelBtn: document.getElementById("cancelBtn"),
-            saveCsvBtn: document.getElementById("saveCsvBtn")
+            saveCsvBtn: document.getElementById("saveCsvBtn"),
+            deckModal: document.getElementById("deckCreatorModal"),
+            deckNameInput: document.getElementById("deckNameInput"),
+            deckTypeSelector: document.getElementById("deckTypeSelector"),
+            createDeckBtn: document.getElementById("createDeckBtn"),
+            cancelDeckCreationBtn: document.getElementById("cancelDeckCreationBtn"),
         };
+
+        function loadDeckTypeSelector() {
+            const deckTypeSelector = dom.deckTypeSelector;
+            deckTypeSelector.innerHTML = "";
+
+            state.deckTypes.forEach(type => {
+                const option = document.createElement("option");
+                option.value = type;
+                option.textContent = type;
+                deckTypeSelector.appendChild(option);
+            });
+        }
 
         async function fetchSuggestions(query) {
             const url = `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query)}`;
@@ -308,7 +355,7 @@
                 const thead = document.createElement("thead");
                 thead.innerHTML = `
             <tr>
-                <th>ID</th>
+                <th>Added</th>
                 <th>Deck</th>
                 <th>Lang</th>
                 <th>Style</th>
@@ -322,10 +369,19 @@
                     const row = document.createElement("tr");
 
                     const idCell = document.createElement("td");
-                    idCell.textContent = cardObj.id;
+                    idCell.textContent = new Date(cardObj.id).toLocaleString("es-ES").replace(",", " -");
 
                     const deckCell = document.createElement("td");
-                    deckCell.textContent = cardObj.deck || "(ninguna)";
+                    if(cardObj.deck){
+                        const deck = getDeckById(cardObj.deck);
+                        if(deck){
+                            deckCell.textContent = `${deck.name} (${deck.type})`;
+                            deckCell.style.cursor = "pointer";
+                        }
+                    }
+                    else {
+                        deckCell.textContent = "None";
+                    }
                     deckCell.style.cursor = "pointer";
                     deckCell.style.color = "blue";
                     deckCell.onclick = () => showDeckSelector(name, index, deckCell);
@@ -416,51 +472,44 @@
             selector.style.top = `${rect.bottom + window.scrollY}px`;
             selector.style.left = `${rect.left + window.scrollX}px`;
 
-            const decks = Object.keys(state.decks);
-
             const noneOption = document.createElement("div");
-            noneOption.textContent = "(ninguna)";
+            noneOption.textContent = "None";
             noneOption.style.cursor = "pointer";
             noneOption.style.padding = "4px";
             noneOption.onclick = (e) => {
                 e.stopPropagation();
                 state.cardsOwned[cardName][cardIndex].deck = null;
-                deckCell.textContent = "(ninguna)";
+                deckCell.textContent = "None";
                 selector.remove();
                 renderLibraryTable();
             };
             selector.appendChild(noneOption);
 
-
-            decks.forEach(deckName => {
+            for (const deckName in state.decks) {
+                const deck = state.decks[deckName];
                 const option = document.createElement("div");
-                option.textContent = deckName;
+                option.textContent = `${deck.name} (${deck.type})`;
                 option.style.cursor = "pointer";
                 option.style.padding = "4px";
                 option.onclick = (e) => {
                     e.stopPropagation();
-                    state.cardsOwned[cardName][cardIndex].deck = deckName;
-                    deckCell.textContent = deckName;
+                    state.cardsOwned[cardName][cardIndex].deck = deck.id;
+                    deckCell.textContent = `${deck.name} (${deck.type})`;
                     selector.remove();
                     renderLibraryTable();
                 };
                 selector.appendChild(option);
-            });
+            }
 
             const newDeckOption = document.createElement("div");
-            newDeckOption.textContent = "➕ Nueva deck…";
+            newDeckOption.textContent = "➕ New deck";
             newDeckOption.style.cursor = "pointer";
             newDeckOption.style.color = "green";
             newDeckOption.style.padding = "4px";
             newDeckOption.onclick = (e) => {
                 e.stopPropagation();
-                const newDeckName = prompt("Nombre de la nueva deck:");
-                if (newDeckName) {
-                    state.decks[newDeckName] = true;
-                    state.cardsOwned[cardName][cardIndex].deck = newDeckName;
-                    deckCell.textContent = newDeckName;
-                    renderLibraryTable();
-                }
+                cardId = state.cardsOwned[cardName][cardIndex].id;
+                showDeckModal(cardId);
                 selector.remove();
             };
             selector.appendChild(newDeckOption);
@@ -500,50 +549,6 @@
             reader.readAsText(file);
         });
 
-
-        function renderLibraryFromCsv(csv) {
-            var imported = false;
-            const cards = cardsFromCsv(csv);
-
-            if (cards || cards.length > 0) {
-                extractDeckNamesFromCArds(cards);
-                state.cardsOwned = cards;
-                renderLibraryTable();
-                imported = true;
-            }
-
-            document.getElementById("importModal").style.display = "none";
-            document.getElementById("overlay").style.display = "none";
-
-            return imported;
-        }
-
-        function cardsFromCsv(csvFileContent) {
-            const cards = {};
-            const lines = csvFileContent.split("\n").map(line => line.trim()).filter(line => line.length > 0);
-            lines.forEach(line => {
-                line = line.replace(/^"|"$/g, "");
-                const [name, id, deck, lang, style] = line.split(";");
-                const trimmedName = name?.trim();
-                if (!trimmedName) return;
-                if (!cards[trimmedName]) cards[trimmedName] = [];
-                var card = { id: parseInt(id), name: trimmedName, deck: deck?.trim() || null, lang: lang?.trim() || "EN" , style: style?.trim() || "b" };
-                if (card.deck == '(ninguna)') card.deck = null;
-                cards[trimmedName].push(card);
-            });
-            return cards;
-        }
-
-        function extractDeckNamesFromCArds(cards) {
-            Object.values(cards).forEach(cardArray => {
-                cardArray.forEach(card => {
-                    if (card.deck && !state.decks[card.deck]) {
-                        state.decks[card.deck] = true;
-                    }
-                });
-            });
-        }
-
         function loadFromGoogleSheets() {
             const url = document.getElementById("sheetUrl").value.trim();
             if (!url) return alert("Proporciona un enlace válido.");
@@ -569,19 +574,60 @@
         }
 
         function saveCardsToCSV() {
-            const cardsOwnedArray = Object.keys(state.cardsOwned).map(cardName => {
-                const cardData = state.cardsOwned[cardName];
-                return cardData.map(card => `${card.name};${card.id};${card.deck || "(ninguna)"};${card.lang || "EN"};${card.style || "b"}`).join("\n");
+            const decksArray = Object.keys(state.decks).map(deckName => {
+                const deck = state.decks[deckName];
+                return `${deck.name};${deck.id};${deck.type}`;
             }).join("\n");
 
-            const csvContent = cardsOwnedArray;
+            const cardsOwnedArray = Object.keys(state.cardsOwned).map(cardName => {
+                const cards = state.cardsOwned[cardName];
+                return cards.map(
+                    card => 
+                    {
+                        var deck = null;
+                        if(card.deck)
+                        {
+                            deck = getDeckById(card.deck);
+                        }
+                        var deckId = deck ? deck.name : "null";
+                        return `${card.name};${card.id};${deckId};${card.lang || "EN"};${card.style || "b"}`;
+                    }
+                ).join("\n");
+            }).join("\n");
+
+            const wishListArray = Object.keys(state.wishList).map(cardName => {
+                const cards = state.wishList[cardName];
+                return cards.map(
+                    wishedCard => 
+                    {
+                        var deck = null;
+                        if(wishedCard.deck)
+                        {
+                            deck = getDeckById(wishedCard.deck);
+                        }
+                        var deckId = deck ? deck.name : "null";
+                        return `${wishedCard.name};${wishedCard.id};${deckId};${wishedCard.replaces || "null"}`;
+                    }
+                ).join("\n");
+            }).join("\n");
+
+            let csvContent = "";
+            if (decksArray.length > 0) {
+                csvContent += "[DECKS]\n" + decksArray + "\n";
+            }
+            if (cardsOwnedArray.length > 0) {
+                csvContent += "[LIBRARY]\n" + cardsOwnedArray + "\n";
+            }
+            if (wishListArray.length > 0) {
+                csvContent += "[WISH_LIST]\n" + wishListArray + "\n";
+            }
 
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
             const link = document.createElement("a");
             if (link.download !== undefined) {
                 const url = URL.createObjectURL(blob);
                 link.setAttribute("href", url);
-                link.setAttribute("download", "cartas_seleccionadas.csv");
+                link.setAttribute("download", "library.csv");
                 link.style.visibility = "hidden";
                 document.body.appendChild(link);
                 link.click();
@@ -589,8 +635,127 @@
             }
         }
 
+        function splitCsvEntities(csv) {
+            const decksArray = [];
+            const cardsArray = [];
+            const wishListArray = [];
+
+            const lines = csv.split("\r\n").map(line => line.trim()).filter(line => line.length > 0);
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.startsWith("[DECKS]")) {
+                    i++;
+                    while (i < lines.length && !lines[i].startsWith("[")) {
+                        decksArray.push(lines[i].replace(/^"|"$/g, ""));
+                        i++;
+                    }
+                    i--;
+                } else if (line.startsWith("[LIBRARY]")) {
+                    i++;
+                    while (i < lines.length && !lines[i].startsWith("[")) {
+                        cardsArray.push(lines[i].replace(/^"|"$/g, ""));
+                        i++;
+                    }
+                    i--;
+                } else if (line.startsWith("[WISH_LIST]")) {
+                    i++;
+                    while (i < lines.length && !lines[i].startsWith("[")) {
+                        wishListArray.push(lines[i].replace(/^"|"$/g, ""));
+                        i++;
+                    }
+                    i--;
+                }
+            }
+
+            var decksCsv = null;
+            if(decksArray.length > 0){
+                decksCsv = decksArray.join("\n");
+            }
+            var cardsCsv = null;
+            if(cardsArray.length > 0){
+                cardsCsv = cardsArray.join("\n");
+            }
+            var wishListCsv = null;
+            if(wishListArray.length > 0){
+                wishListCsv = wishListArray.join("\n");
+            }
+
+            return { 
+                decksCsv: decksCsv,
+                cardsCsv: cardsCsv,
+                wishListCsv: wishListCsv 
+            };
+        }
+
+        function cardsFromCsv(cardsCsv) {
+            const cards = {};
+            const lines = cardsCsv.split("\n").map(line => line.trim()).filter(line => line.length > 0);
+            lines.forEach(line => {
+                const [name, id, deck, lang, style] = line.split(";");
+                const trimmedName = name?.trim();
+                if (!trimmedName) return;
+                if (!cards[trimmedName]) cards[trimmedName] = [];
+                var card = { id: parseInt(id), name: trimmedName, deck: deck ? parseInt(deck.trim()) : null || null, lang: lang?.trim() || "EN" , style: style?.trim() || "b" };
+                if (card.deck == 'null') card.deck = null;
+                cards[trimmedName].push(card);
+            });
+            return cards;
+        }
+
+        function decksFromCsv(decksCsv) {
+            const decks = {};
+            const lines = decksCsv.split("\n").map(line => line.trim()).filter(line => line.length > 0);
+            lines.forEach(line => {
+                const [name, id, type] = line.split(";");
+                const trimmedName = name?.trim();
+                if (!trimmedName) return;
+                decks[trimmedName] = { id: parseInt(id), name: trimmedName, type: type?.trim() || "EDH" };
+            });
+            return decks;
+        }
+
+        function wishListFromCsv(wishListCsv) {
+            const wishList = {};
+            const lines = wishListCsv.split("\n").map(line => line.trim()).filter(line => line.length > 0);
+            lines.forEach(line => {
+                const [name, id, deck, replaces] = line.split(";");
+                const trimmedName = name?.trim();
+                if (!trimmedName) return;
+                if (!wishList[trimmedName]) wishList[trimmedName] = [];
+                var card = { id: parseInt(id), name: trimmedName, deck: deck?.trim() || null, replaces: replaces?.trim() || null };
+                if (card.deck == 'null') card.deck = null;
+                wishList[trimmedName].push(card);
+            });
+            return wishList;
+        }
+
+        function renderLibraryFromCsv(csv) {
+            var imported = false;
+
+            const entities = splitCsvEntities(csv);
+            if(entities.decksCsv){
+                state.decks = decksFromCsv(entities.decksCsv);
+            }
+            if(entities.cardsCsv){
+                state.cardsOwned = cardsFromCsv(entities.cardsCsv);
+            }
+            if(entities.wishListCsv){
+                state.wishList = cardsFromCsv(entities.wishListCsv);
+            }
+            
+            if (state.cardsOwned || state.cardsOwned.length > 0) {
+                renderLibraryTable();
+                imported = true;
+            }
+
+            document.getElementById("importModal").style.display = "none";
+            document.getElementById("overlay").style.display = "none";
+
+            return imported;
+        }
+
         function renderLibraryFilterOptions() {
-            const decks = Object.keys(state.decks);
+            const decks = state.decks;
             const select = document.getElementById("deckFilter");
             const currenSelectedValueBuffer = select.value;
 
@@ -608,15 +773,16 @@
 
                 const noneOption = document.createElement("option");
                 noneOption.value = "__NONE__";
-                noneOption.textContent = "(ninguna)";
+                noneOption.textContent = "No deck";
                 select.appendChild(noneOption);
 
-                decks.forEach(deck => {
+                for (const deckName in decks) {
+                    const deck = decks[deckName];
                     const option = document.createElement("option");
-                    option.value = deck;
-                    option.textContent = deck;
+                    option.value = deck.id;
+                    option.textContent = `${deck.name} (${deck.type})`;
                     select.appendChild(option);
-                });
+                }
 
                 if (currenSelectedValueBuffer && select.querySelector(`option[value="${currenSelectedValueBuffer}"]`)) {
                     select.value = currenSelectedValueBuffer;
@@ -636,21 +802,26 @@
             for (const cardName in state.cardsOwned) {
                 const cardArray = state.cardsOwned[cardName];
                 if (cardArray.length === 0) continue;
-
                 const filteredCards = cardArray.filter(card => {
-                    const deckName = card.deck;
-
-                    if (deckFilter === "__ALL__") {
-                        return true;
-                    } else if (deckFilter === "__NONE__") {
-                        return !deckName;
-                    } else {
-                        return deckName && deckName.toLowerCase() === deckFilter.toLowerCase();
+                    var suitsFilter = false;
+                    if (deckFilter === "__ALL__") 
+                    {
+                        suitsFilter = true;
+                    } 
+                    else if (deckFilter === "__NONE__") 
+                    {
+                        suitsFilter = !card.deck;
+                    } 
+                    else
+                    {
+                        const deckId = card.deck;
+                        if(deckId){
+                            suitsFilter = deckId === parseInt(deckFilter);
+                        }
                     }
+                    return suitsFilter;
                 });
-
                 if (filteredCards.length === 0) continue;
-
                 if (!grouped[cardName]) {
                     grouped[cardName] = [];
                 }
@@ -674,12 +845,18 @@
 
                 const deckCounts = {};
                 cards.forEach(card => {
-                    const deck = card.deck || "sin deck";
-                    deckCounts[deck] = (deckCounts[deck] || 0) + 1;
+                    var deckName = "None";
+                    if(card.deck){
+                        var deck = getDeckById(card.deck);
+                        if(deck){
+                            deckName = deck.name;
+                        }
+                    }
+                    deckCounts[deckName] = (deckCounts[deckName] || 0) + 1;
                 });
 
                 const deckSummary = Object.entries(deckCounts)
-                    .map(([deck, qty]) => `${deck} (${qty})`)
+                    .map(([deckName, qty]) =>`${deckName} (${qty})`)
                     .join(", ");
 
                 const row = document.createElement("tr");
@@ -730,6 +907,11 @@
 
         dom.overlay.addEventListener("click", () => {
             closeImportModal();
+            closeDeckModal();
+        });
+
+        dom.cancelDeckCreationBtn.addEventListener("click", () => {
+            closeDeckModal();
         });
 
         dom.cancelBtn.addEventListener("click", () => {
@@ -767,7 +949,7 @@
                     }
                 }
 
-
+                loadDeckTypeSelector();
             });
         });
 
@@ -780,6 +962,59 @@
             dom.overlay.style.display = "none";
             dom.importModal.style.display = "none";
         }
+
+        function showDeckModal(cardId) {
+            dom.overlay.style.display = "block";
+            dom.deckModal.style.display = "block";
+
+            const deckNameInput = document.getElementById("deckNameInput");
+            const dedcCreationConfirmButton = document.getElementById("createDeckBtn");
+            const deckTypeSelector = document.getElementById("deckTypeSelector");
+
+            dedcCreationConfirmButton.onclick = () => {
+                newDeckName = deckNameInput.value.trim();
+                if (!newDeckName || newDeckName.length == 0) {
+                    alert("Proporciona un nombre de deck válido.");
+                }
+                else {
+                    if (state.decks[newDeckName]) {
+                        alert("Ya existe un deck con ese nombre.");
+                    } 
+                    else {
+                        deck = {
+                            id: Date.now(),
+                            name: newDeckName,
+                            type: deckTypeSelector.value
+                        }
+                        state.decks[newDeckName] = deck;
+                        if(cardId){
+                            var card = Object.values(state.cardsOwned).flat().find(card => card.id === cardId);
+                            if(card){
+                                card.deck = deck.id;
+                                renderCardTable(card.name);
+                                renderLibraryTable();
+                            }
+                        }
+                        closeDeckModal();
+                    }
+                }
+            };
+        }
+
+        function getDeckById(deckId){
+            return Object.values(state.decks).find(deck => deck.id === deckId);
+        }
+
+        function getCardById(cardId){
+            return Object.values(state.cardsOwned).flat().find(card => card.id === cardId);
+        }
+
+        function closeDeckModal() {
+            dom.overlay.style.display = "none";
+            dom.deckModal.style.display = "none";
+            document.getElementById("deckNameInput").value = "";
+        }
+
     </script>
 </body>
 

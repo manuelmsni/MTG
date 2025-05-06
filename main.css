@@ -150,7 +150,7 @@ input[type="text"] {
 }
 
 /* Estilos del modal */
-#importModal {
+#importModal, #deckCreatorModal {
     position: fixed;
     top: 20%;
     left: 50%;
@@ -204,7 +204,6 @@ button#cancelBtn:hover {
     background-color: #d32f2f;
 }
 
-/* Botón de "Cargar" */
 button#loadBtn {
     background-color: #4caf50;
     color: white;
