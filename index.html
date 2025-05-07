@@ -542,6 +542,9 @@
                     foilCheckBox.checked = cardObj.foil === true;
                     foilCheckBox.onchange = () => {
                         cardObj.foil = foilCheckBox.checked ? true : false;
+                        calculatePrice(cardObj).then(price => {
+                            priceCell.textContent = price || "?";
+                        });
                     };
                     foilCell.appendChild(foilCheckBox);
 
@@ -602,8 +605,8 @@
                     );
 
                     if (prices) {
-                        if (card.foil && prices.foil) {
-                            price = prices.foil;
+                        if (card.foil && prices.usd_foil) {
+                            price = prices.usd_foil;
                         } else if (prices.usd) {
                             price = prices.usd;
                         }
