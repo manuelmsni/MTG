@@ -303,36 +303,35 @@
                 img.style.maxWidth = "200px";
                 img.style.maxHeight = "300px";
 
+                const buttonsDiv = document.createElement("div");
+                buttonsDiv.style.display = "flex";
+                buttonsDiv.style.justifyContent = "space-between";
+                buttonsDiv.style.padding = ".3rem";
+
                 const plusWishedBtn = document.createElement("button");
                 plusWishedBtn.textContent = "❤️";
                 plusWishedBtn.style.border = "none";
                 plusWishedBtn.style.backgroundColor = "transparent";
                 plusWishedBtn.onclick = () => addCardToWishList(name);
 
-                cardInfoContainer.appendChild(img);
-                cardInfoContainer.appendChild(plusWishedBtn);
-
-                const cardsOwnedWrapper = document.createElement("div");
-                cardsOwnedWrapper.style.display = "flex";
-                cardsOwnedWrapper.style.alignItems = "center";
-                cardsOwnedWrapper.style.gap = "1rem";
-
-                const cardsOwnedCount = document.createElement("h4");
-                cardsOwnedCount.textContent = "Cards owned";
-
                 const plusBtn = document.createElement("button");
-                plusBtn.textContent = "+";
+                plusBtn.textContent = "➕";
+                plusBtn.style.border = "none";
+                plusBtn.style.backgroundColor = "transparent";
                 plusBtn.onclick = () => addCardToLibrary(name);
 
+                buttonsDiv.appendChild(plusWishedBtn);
+                buttonsDiv.appendChild(plusBtn);
+
+                cardInfoContainer.appendChild(img);
+
+                cardInfoContainer.appendChild(buttonsDiv);
+                
                 const cardsWishedWrapper = document.createElement("div");
                 cardsWishedWrapper.style.display = "flex";
                 cardsWishedWrapper.style.alignItems = "center";
                 cardsWishedWrapper.style.gap = "1rem";
 
-                cardsOwnedWrapper.appendChild(cardsOwnedCount);
-                cardsOwnedWrapper.appendChild(plusBtn);
-
-                cardTableContainer.appendChild(cardsOwnedWrapper);
                 cardTableContainer.appendChild(cardsWishedWrapper);
 
                 cardBody.appendChild(cardInfoContainer);
@@ -409,12 +408,12 @@
                 const thead = document.createElement("thead");
                 thead.innerHTML = `
             <tr>
+                <th></th>
                 <th>Added</th>
                 <th>Deck</th>
                 <th>Lang</th>
                 <th>Variant</th>
-                <th>Foil</th>
-                <th></th>
+                <th>Foil</th>  
             </tr>`;
                 table.appendChild(thead);
 
@@ -557,12 +556,13 @@
                     };
                     removeCell.appendChild(removeBtn);
 
+                    row.appendChild(removeCell);
                     row.appendChild(idCell);
                     row.appendChild(deckCell);
                     row.appendChild(langCell);
                     row.appendChild(variantCell);
                     row.appendChild(foilCell);
-                    row.appendChild(removeCell);
+                    
 
                     tbody.appendChild(row);
                 });

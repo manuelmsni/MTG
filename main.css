@@ -34,8 +34,7 @@ input[type="text"] {
 }
 
 .autocomplete>button {
-    padding:
-        0px 6px;
+    padding: 0px 6px;
     font-size: 1rem;
     cursor: pointer;
     height: 36px;
@@ -221,7 +220,7 @@ button#loadBtn:hover {
 }
 
 .card-preview h3 {
-    margin: .5rem 0 .5rem 0;
+    margin: 0 0 .8rem 0;
     text-decoration: underline;
     width: 100%;
 }
