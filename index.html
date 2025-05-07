@@ -901,7 +901,7 @@
 
             let cardsCount = 0;
 
-            const grouped = {};
+            var grouped = {};
 
             for (const cardName in state.cardsOwned) {
                 const cardArray = state.cardsOwned[cardName];
@@ -939,6 +939,9 @@
             table.appendChild(thead);
 
             const tbody = document.createElement("tbody");
+
+            // Ordenar alfabeticamente por nombre de carta, devolver el grouped, pero ordenado
+            grouped = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
 
             for (const cardName in grouped) {
                 const cards = grouped[cardName];
