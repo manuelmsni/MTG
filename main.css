@@ -1,5 +1,6 @@
 body {
-    font-family: Arial;
+    font-family: monospace;
+    font-size: larger;
     padding: 2rem;
     margin: 0;
     min-height: 100vh;
@@ -50,6 +51,7 @@ input[type="text"] {
     right: 0;
     background: white;
     z-index: 10;
+    border-bottom: 1px solid #80808040;
 }
 
 .suggestion {
@@ -218,9 +220,14 @@ button#loadBtn:hover {
     background-color: #388e3c;
 }
 
-.card-preview h4 {
+.card-preview h3 {
     margin: .5rem 0 .5rem 0;
     text-decoration: underline;
+    width: 100%;
+}
+
+.card-preview h4 {
+    margin: .5rem 0 .5rem 0;
 }
 
 table {
@@ -229,7 +236,7 @@ table {
 
 tbody td {
     box-shadow: 0 0 0 2px #f4aab9, 0 0 0 4px #66ccff;
-    padding: .3rem;
+    padding: .3rem .6rem;
     border-radius: .5rem;
 }
 

@@ -89,6 +89,10 @@
                 "Explorer",
                 "Frontier"
             ],
+            cardLanguages: [
+                "EN",
+                "ES"
+            ],
             cardsDataCache: {},
             cardsInStage: {},
             decks: {},
@@ -238,7 +242,7 @@
 
                 const cardHeader = document.createElement("div");
                 cardHeader.className = "card-preview-header";
-                const title = document.createElement("h4");
+                const title = document.createElement("h3");
                 title.textContent = cardData.name;
 
                 const unstageCardButton = document.createElement("button");
@@ -269,31 +273,23 @@
                 img.style.maxWidth = "100px";
                 img.style.maxHeight = "150px";
 
-                const inputWrapper = document.createElement("div");
-                inputWrapper.style.display = "flex";
-                inputWrapper.style.alignItems = "center";
+                const cardsOwnedWrapper = document.createElement("div");
+                cardsOwnedWrapper.style.display = "flex";
+                cardsOwnedWrapper.style.alignItems = "center";
+                cardsOwnedWrapper.style.gap = "1rem";
 
-                const minusBtn = document.createElement("button");
-                minusBtn.textContent = "-";
-                minusBtn.onclick = () => removeCardFromLibrary(name);
-
-                const input = document.createElement("input");
-                input.type = "number";
-                input.value = state.cardsOwned[name] ? state.cardsOwned[name].length : 0;
-                input.style.width = "40px";
-                input.disabled = true;
+                const cardsOwnedCount = document.createElement("h4");
+                cardsOwnedCount.textContent = "Cards owned";
 
                 const plusBtn = document.createElement("button");
                 plusBtn.textContent = "+";
                 plusBtn.onclick = () => addCardToLibrary(name);
 
-                inputWrapper.appendChild(minusBtn);
-                inputWrapper.appendChild(input);
-                inputWrapper.appendChild(plusBtn);
-
+                cardsOwnedWrapper.appendChild(cardsOwnedCount);
+                cardsOwnedWrapper.appendChild(plusBtn);
 
                 cardInfoContainer.appendChild(img);
-                cardInfoContainer.appendChild(inputWrapper);
+                cardTableContainer.appendChild(cardsOwnedWrapper);
 
                 cardBody.appendChild(cardInfoContainer);
                 cardBody.appendChild(cardTableContainer);
@@ -311,40 +307,33 @@
             const newCard = { id: Date.now(), name: name, deck: null };
             if (!state.cardsOwned[name]) state.cardsOwned[name] = [];
             state.cardsOwned[name].push(newCard);
-
-            updateCardCountInStage(name);
             renderCardTable(name);
             var deckFilter = document.getElementById("deckFilter").value;
             renderLibraryTable(deckFilter);
         }
 
-        function removeCardFromLibrary(name) {
+        function removeCardFromLibrary(name, index)
+        {
             const cards = state.cardsOwned[name];
             if (!cards || cards.length === 0) return;
 
-            const index = cards.findIndex(card => !card.deck);
+            if(!index){
+                index = cards.findIndex(card => !card.deck);
+            }
 
-            if (index !== -1) {
-                cards.splice(index, 1);
-            } else {
+            const card = cards[index];
+
+            if (!card) return;
+
+            if (card.deck) {
                 const card = cards[0];
                 const confirmar = confirm(`La carta "${name}" está asociada a la deck "${card.deck}". ¿Deseas eliminarla de todas formas?`);
                 if (!confirmar) return;
-                cards.shift();
             }
-
-            updateCardCountInStage(name);
+            cards.splice(index, 1);
             renderCardTable(name);
             var deckFilter = document.getElementById("deckFilter").value;
             renderLibraryTable(deckFilter);
-        }
-
-        function updateCardCountInStage(name) {
-            const cardDiv = document.getElementById(`card-${name}`);
-            if (!cardDiv) return;
-
-            const input = cardDiv.querySelector("input");
-            input.value = state.cardsOwned[name] ? state.cardsOwned[name].length : 0;
         }
 
         function renderCardTable(name) {
@@ -377,23 +366,41 @@
                     idCell.textContent = new Date(cardObj.id).toLocaleString("es-ES").replace(",", " -");
 
                     const deckCell = document.createElement("td");
-                    if(cardObj.deck){
-                        const deck = getDeckById(cardObj.deck);
-                        if(deck){
-                            deckCell.textContent = `${deck.name} (${deck.type})`;
-                            deckCell.style.cursor = "pointer";
+                    const deckSelector = document.createElement("select");
+                    deckSelector.className = "deck-selector";
+                    deckSelector.appendChild(document.createElement("option")).textContent = "None";
+                    deckSelector.lastChild.value = -1;
+                    for (const deckName in state.decks) {
+                        const deck = state.decks[deckName];
+                        const option = document.createElement("option");
+                        option.textContent = `${deck.name} (${deck.type})`;
+                        option.value = deck.id;
+                        deckSelector.appendChild(option);
+                    }
+                    deckSelector.style.display = "block";
+                    const newDeckOptionNative = document.createElement("option");
+                    newDeckOptionNative.textContent = "➕ New deck";
+                    newDeckOptionNative.value = -2;
+                    deckSelector.appendChild(newDeckOptionNative);
+                    deckSelector.onchange = (e) => {
+                        const selectedDeckId = parseInt(e.target.value);
+                        if (selectedDeckId === -1) {
+                            state.cardsOwned[name][index].deck = null;
+                        } else if (selectedDeckId === -2) {
+                            cardId = state.cardsOwned[name][index].id;
+                            showDeckModal(cardId);
+                        } else {
+                            state.cardsOwned[name][index].deck = selectedDeckId;
                         }
-                    }
-                    else {
-                        deckCell.textContent = "None";
-                    }
-                    deckCell.style.cursor = "pointer";
-                    deckCell.style.color = "blue";
-                    deckCell.onclick = () => showDeckSelector(name, index, deckCell);
+                        var deckFilter = document.getElementById("deckFilter").value;
+                        renderLibraryTable(deckFilter);
+                    };
+                    deckSelector.value = state.cardsOwned[name][index].deck || -1;
+                    deckCell.appendChild(deckSelector);
 
                     const langCell = document.createElement("td");
                     const langSelect = document.createElement("select");
-                    ["EN", "ES"].forEach(lang => {
+                    state.cardLanguages.forEach(lang => {
                         const option = document.createElement("option");
                         option.value = lang;
                         option.textContent = lang;
@@ -440,7 +447,7 @@
                         }
 
                         if (eliminar) {
-                            removeCardFromLibrary(name);
+                            removeCardFromLibrary(name, index);
                             row.remove();
                             var deckFilter = document.getElementById("deckFilter").value;
                             renderLibraryTable(deckFilter);
@@ -463,77 +470,9 @@
         }
 
         function showDeckSelector(cardName, cardIndex, deckCell) {
-            const existingPopup = document.querySelector(".deck-popup");
-            if (existingPopup) existingPopup.remove();
 
-            const selector = document.createElement("div");
-            selector.className = "deck-popup";
-            selector.style.position = "absolute";
-            selector.style.background = "white";
-            selector.style.border = "1px solid #ccc";
-            selector.style.padding = "8px";
-            selector.style.zIndex = 1000;
+            
 
-            const rect = deckCell.getBoundingClientRect();
-            selector.style.top = `${rect.bottom + window.scrollY}px`;
-            selector.style.left = `${rect.left + window.scrollX}px`;
-
-            const noneOption = document.createElement("div");
-            noneOption.textContent = "None";
-            noneOption.style.cursor = "pointer";
-            noneOption.style.padding = "4px";
-            noneOption.onclick = (e) => {
-                e.stopPropagation();
-                state.cardsOwned[cardName][cardIndex].deck = null;
-                deckCell.textContent = "None";
-                selector.remove();
-                var deckFilter = document.getElementById("deckFilter").value;
-                renderLibraryTable(deckFilter);
-            };
-            selector.appendChild(noneOption);
-
-            for (const deckName in state.decks) {
-                const deck = state.decks[deckName];
-                const option = document.createElement("div");
-                option.textContent = `${deck.name} (${deck.type})`;
-                option.style.cursor = "pointer";
-                option.style.padding = "4px";
-                option.onclick = (e) => {
-                    e.stopPropagation();
-                    state.cardsOwned[cardName][cardIndex].deck = deck.id;
-                    deckCell.textContent = `${deck.name} (${deck.type})`;
-                    selector.remove();
-                    var deckFilter = document.getElementById("deckFilter").value;
-                    renderLibraryTable(deckFilter);
-                };
-                selector.appendChild(option);
-            }
-
-            const newDeckOption = document.createElement("div");
-            newDeckOption.textContent = "➕ New deck";
-            newDeckOption.style.cursor = "pointer";
-            newDeckOption.style.color = "green";
-            newDeckOption.style.padding = "4px";
-            newDeckOption.onclick = (e) => {
-                e.stopPropagation();
-                cardId = state.cardsOwned[cardName][cardIndex].id;
-                showDeckModal(cardId);
-                selector.remove();
-            };
-            selector.appendChild(newDeckOption);
-
-            document.body.appendChild(selector);
-
-            setTimeout(() => {
-                function handleClickOutside(event) {
-                    if (selector && !selector.contains(event.target)) {
-                        selector.remove();
-                        document.removeEventListener("click", handleClickOutside);
-                    }
-                }
-
-                document.addEventListener("click", handleClickOutside);
-            }, 0);
         }
 
         document.getElementById("importOption").addEventListener("change", (e) => {
