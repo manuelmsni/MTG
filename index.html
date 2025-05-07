@@ -614,7 +614,7 @@
                     return price;
                 }
             }
-            
+
         }
 
         document.getElementById("importOption").addEventListener("change", (e) => {
@@ -935,34 +935,59 @@
             table.className = "card-table";
 
             const thead = document.createElement("thead");
-            thead.innerHTML = "<tr><th>Card</th><th>Count</th><th>Decks</th></tr>";
+            thead.innerHTML =
+                `<tr>
+        <th>Card</th>
+        <th>Count</th>
+        <th>Decks</th>
+        <th>Sets</th>
+    </tr>`;
             table.appendChild(thead);
 
             const tbody = document.createElement("tbody");
 
-            // Ordenar alfabeticamente por nombre de carta, devolver el grouped, pero ordenado
-            grouped = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+            const sortedCards = Object.keys(grouped).sort((a, b) => {
+                const cardA = state.cardsOwned[a][0];
+                const cardB = state.cardsOwned[b][0];
+                if (cardA.set && cardB.set) {
+                    return cardA.set.localeCompare(cardB.set) || a.localeCompare(b);
+                } else {
+                    return a.localeCompare(b);
+                }
+            });
 
-            for (const cardName in grouped) {
+            sortedCards.forEach(cardName => {
                 const cards = grouped[cardName];
                 const count = cards.length;
+                cardsCount += count;
 
+                // Decks summary
                 const deckCounts = {};
                 cards.forEach(card => {
-                    var deckName = "None";
+                    let deckName = "None";
                     if (card.deck) {
-                        var deck = getDeckById(card.deck);
+                        const deck = getDeckById(card.deck);
                         if (deck) {
                             deckName = deck.name;
                         }
                     }
                     deckCounts[deckName] = (deckCounts[deckName] || 0) + 1;
                 });
-
                 const deckSummary = Object.entries(deckCounts)
                     .map(([deckName, qty]) => `${deckName} (${qty})`)
                     .join(", ");
 
+                // Sets summary
+                const setCounts = {};
+                cards.forEach(card => {
+                    const setName = card.set || "Unknown";
+                    setCounts[setName] = (setCounts[setName] || 0) + 1;
+                });
+                const setSummary = Object.entries(setCounts)
+                    .map(([setName, qty]) => `${setName} (${qty})`)
+                    .join(", ");
+
+                // Build row
                 const row = document.createElement("tr");
 
                 const nameCell = document.createElement("td");
@@ -976,13 +1001,16 @@
                 const deckCell = document.createElement("td");
                 deckCell.textContent = deckSummary;
 
+                const setCell = document.createElement("td");
+                setCell.textContent = setSummary;
+
                 row.appendChild(nameCell);
                 row.appendChild(countCell);
                 row.appendChild(deckCell);
+                row.appendChild(setCell);
 
                 tbody.appendChild(row);
-                cardsCount += count;
-            }
+            });
 
             table.appendChild(tbody);
             dom.cardLibrary.appendChild(table);
