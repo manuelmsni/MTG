@@ -235,8 +235,8 @@
             if (!imageUrl) return;
             const img = document.createElement("img");
             img.src = imageUrl;
-            img.style.maxWidth = "200px";
-            img.style.maxHeight = "300px";
+            img.style.maxWidth = "300px";
+            img.style.maxHeight = "400px";
 
             dom.previewImg.innerHTML = "";
             dom.previewImg.appendChild(img);
@@ -300,8 +300,8 @@
                 const img = document.createElement("img");
                 img.id = `img-${name}`;
                 img.src = cardData.image_uris.normal;
-                img.style.maxWidth = "100px";
-                img.style.maxHeight = "150px";
+                img.style.maxWidth = "200px";
+                img.style.maxHeight = "300px";
 
                 const plusWishedBtn = document.createElement("button");
                 plusWishedBtn.textContent = "❤️";
@@ -527,7 +527,6 @@
                     };
 
                     variantCell.appendChild(variantSelector);
-
 
                     const foilCell = document.createElement("td");
                     const foilCheckBox = document.createElement("input");
