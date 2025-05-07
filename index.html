@@ -263,6 +263,8 @@
 
                 const cardInfoContainer = document.createElement("div");
                 cardInfoContainer.className = "card-info-container";
+                cardInfoContainer.style.display = "flex";
+                cardInfoContainer.style.flexDirection = "column";
 
                 const cardTableContainer = document.createElement("div");
                 cardTableContainer.id = `table-${name}`;
@@ -272,6 +274,15 @@
                 img.src = cardData.image_uris.normal;
                 img.style.maxWidth = "100px";
                 img.style.maxHeight = "150px";
+
+                const plusWishedBtn = document.createElement("button");
+                plusWishedBtn.textContent = "❤️";
+                plusWishedBtn.style.border = "none";
+                plusWishedBtn.style.backgroundColor = "transparent";
+                plusWishedBtn.onclick = () => addCardToWishList(name);
+
+                cardInfoContainer.appendChild(img);
+                cardInfoContainer.appendChild(plusWishedBtn);
 
                 const cardsOwnedWrapper = document.createElement("div");
                 cardsOwnedWrapper.style.display = "flex";
@@ -285,11 +296,16 @@
                 plusBtn.textContent = "+";
                 plusBtn.onclick = () => addCardToLibrary(name);
 
+                const cardsWishedWrapper = document.createElement("div");
+                cardsWishedWrapper.style.display = "flex";
+                cardsWishedWrapper.style.alignItems = "center";
+                cardsWishedWrapper.style.gap = "1rem";
+
                 cardsOwnedWrapper.appendChild(cardsOwnedCount);
                 cardsOwnedWrapper.appendChild(plusBtn);
-
-                cardInfoContainer.appendChild(img);
+                
                 cardTableContainer.appendChild(cardsOwnedWrapper);
+                cardTableContainer.appendChild(cardsWishedWrapper);
 
                 cardBody.appendChild(cardInfoContainer);
                 cardBody.appendChild(cardTableContainer);
