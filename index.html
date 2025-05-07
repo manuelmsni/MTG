@@ -91,9 +91,17 @@
             ],
             cardLanguages: [
                 "EN",
-                "ES"
+                "ES",
+                "FR",
+                "DE",
+                "IT",
+                "PT",
+                "RU",
+                "JA",
+                "KO"
             ],
             cardsDataCache: {},
+            cardsVariantDataCache: {},
             cardsInStage: {},
             decks: {},
             cardsOwned: {},
@@ -150,6 +158,19 @@
             return data;
         }
 
+        async function fetchVariants(name) {
+            if (state.cardsVariantDataCache[name]) return state.cardsVariantDataCache[name];
+            const cardData = await fetchCardData(name);
+            if (cardData) {
+                const url = cardData.prints_search_uri;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                state.cardsVariantDataCache[name] = data;
+                return data;
+            }
+        }
+
         async function handleSearch() {
             const query = dom.input.value.trim();
             if (!query) return clearSuggestions();
@@ -199,33 +220,39 @@
 
         async function showPreview(name) {
             try {
-                const data = await fetchCardData(name);
-                if (data.image_uris) {
-                    const img = document.createElement("img");
-                    img.src = data.image_uris.normal;
-                    img.style.maxWidth = "200px";
-                    img.style.maxHeight = "300px";
-
-                    dom.previewImg.innerHTML = "";
-                    dom.previewImg.appendChild(img);
-                    dom.previewImg.style.display = "block";
-
-                    if (!clearPreview) {
-                        clearPreview = (e) => {
-                            if (e.target.closest(".suggestion") === null) {
-                                dom.previewImg.style.display = "none";
-                                document.body.removeEventListener("mouseover", clearPreview);
-                                clearPreview = null;
-                            }
-                        };
-                        document.body.addEventListener("mouseover", clearPreview);
+                fetchCardData(name).then((data) => {
+                    if (data && data.image_uris) {
+                        showCardPreviewHoveringElement(data.image_uris.normal);
                     }
-
-                }
+                });
             } catch (err) {
                 console.error("Error al mostrar la imagen de la carta:", err);
                 dom.previewImg.style.display = "none";
             }
+        }
+
+        async function showCardPreviewHoveringElement(imageUrl) {
+            if (!imageUrl) return;
+            const img = document.createElement("img");
+            img.src = imageUrl;
+            img.style.maxWidth = "200px";
+            img.style.maxHeight = "300px";
+
+            dom.previewImg.innerHTML = "";
+            dom.previewImg.appendChild(img);
+            dom.previewImg.style.display = "block";
+
+            if (!clearPreview) {
+                clearPreview = (e) => {
+                    if (e.target.closest(".suggestion") === null) {
+                        dom.previewImg.style.display = "none";
+                        document.body.removeEventListener("mouseover", clearPreview);
+                        clearPreview = null;
+                    }
+                };
+                document.body.addEventListener("mouseover", clearPreview);
+            }
+
         }
 
         async function showCardPreview(name) {
@@ -271,6 +298,7 @@
                 cardTableContainer.className = "card-table-container";
 
                 const img = document.createElement("img");
+                img.id = `img-${name}`;
                 img.src = cardData.image_uris.normal;
                 img.style.maxWidth = "100px";
                 img.style.maxHeight = "150px";
@@ -303,7 +331,7 @@
 
                 cardsOwnedWrapper.appendChild(cardsOwnedCount);
                 cardsOwnedWrapper.appendChild(plusBtn);
-                
+
                 cardTableContainer.appendChild(cardsOwnedWrapper);
                 cardTableContainer.appendChild(cardsWishedWrapper);
 
@@ -320,7 +348,15 @@
         }
 
         function addCardToLibrary(name) {
-            const newCard = { id: Date.now(), name: name, deck: null };
+            const newCard = {
+                id: Date.now(),
+                name: name,
+                deck: null,
+                lang: "EN",
+                set: null,
+                collectorNumber: null,
+                foil: false
+            };
             if (!state.cardsOwned[name]) state.cardsOwned[name] = [];
             state.cardsOwned[name].push(newCard);
             renderCardTable(name);
@@ -328,12 +364,20 @@
             renderLibraryTable(deckFilter);
         }
 
-        function removeCardFromLibrary(name, index)
-        {
+        function addCardToWishList(name) {
+            const newCard = { id: Date.now(), name: name, deck: null };
+            if (!state.wishList[name]) state.wishList[name] = [];
+            state.wishList[name].push(newCard);
+            renderCardTable(name);
+            var deckFilter = document.getElementById("deckFilter").value;
+            renderLibraryTable(deckFilter);
+        }
+
+        function removeCardFromLibrary(name, index) {
             const cards = state.cardsOwned[name];
             if (!cards || cards.length === 0) return;
 
-            if(!index){
+            if (!index) {
                 index = cards.findIndex(card => !card.deck);
             }
 
@@ -368,7 +412,8 @@
                 <th>Added</th>
                 <th>Deck</th>
                 <th>Lang</th>
-                <th>Style</th>
+                <th>Variant</th>
+                <th>Foil</th>
                 <th></th>
             </tr>`;
                 table.appendChild(thead);
@@ -428,28 +473,70 @@
                     };
                     langCell.appendChild(langSelect);
 
-                    const styleCell = document.createElement("td");
-                    const styleSelect = document.createElement("select");
+                    const variantCell = document.createElement("td");
+                    const variantSelector = document.createElement("select");
 
-                    const styleOptions = [
-                        { value: "b", label: "basic" },
-                        { value: "f", label: "foil" },
-                        { value: "fa", label: "fullart" },
-                        { value: "faf", label: "fullart foil" }
-                    ];
+                    const defaultOption = document.createElement("option");
+                    defaultOption.value = null;
+                    defaultOption.textContent = "Unespecified";
+                    variantSelector.appendChild(defaultOption);
 
-                    styleOptions.forEach(style => {
-                        const option = document.createElement("option");
-                        option.value = style.value;
-                        option.textContent = style.label;
-                        if (cardObj.style === style.value) option.selected = true;
-                        styleSelect.appendChild(option);
+                    fetchVariants(name).then((variants) => {
+                        if (variants && variants.data.length > 0) {
+                            variants.data.forEach(variant => {
+                                const option = document.createElement("option");
+                                option.value = JSON.stringify({
+                                    set: variant.set,
+                                    collectorNumber: variant.collector_number,
+                                    imageUrl: variant.image_uris.normal
+                                });
+                                option.textContent = `${variant.set_name} - [${variant.set}] - [${variant.collector_number}]`;
+                                if (cardObj.id === variant.id) option.selected = true;
+                                variantSelector.appendChild(option);
+                            });
+                        }
+                        if (cardObj.set && cardObj.collectorNumber) {
+                            const selectedOption = Array.from(variantSelector.options).find(option => {
+                                if(option.value === "null") return false;
+                                const value = JSON.parse(option.value);
+                                return value.set === cardObj.set && value.collectorNumber === cardObj.collectorNumber;
+                            });
+                            if (selectedOption) {
+                                variantSelector.value = selectedOption.value;
+                            }
+                        }
                     });
 
-                    styleSelect.onchange = () => {
-                        cardObj.style = styleSelect.value;
+                    variantSelector.onchange = () => {
+                        const cardImage = document.getElementById(`img-${name}`);
+                        if(variantSelector.value === "null") {
+                            cardObj.set = null;
+                            cardObj.collectorNumber = null;
+                            if (cardImage) {
+                                cardImage.src = state.cardsDataCache[name].image_uris.normal;
+                            }
+                        }
+                        else {
+                            const value = JSON.parse(variantSelector.value);
+                            cardObj.set = value.set;
+                            cardObj.collectorNumber = value.collectorNumber;
+                            if (cardImage) {
+                                cardImage.src = value.imageUrl;
+                            }
+                        }
                     };
-                    styleCell.appendChild(styleSelect);
+
+                    variantCell.appendChild(variantSelector);
+
+
+                    const foilCell = document.createElement("td");
+                    const foilCheckBox = document.createElement("input");
+                    foilCheckBox.type = "checkbox";
+                    foilCheckBox.checked = cardObj.foil === true;
+                    foilCheckBox.onchange = () => {
+                        cardObj.foil = foilCheckBox.checked ? true : false;
+                    };
+                    foilCell.appendChild(foilCheckBox);
 
                     const removeCell = document.createElement("td");
                     removeCell.style.boxShadow = "none";
@@ -474,7 +561,8 @@
                     row.appendChild(idCell);
                     row.appendChild(deckCell);
                     row.appendChild(langCell);
-                    row.appendChild(styleCell);
+                    row.appendChild(variantCell);
+                    row.appendChild(foilCell);
                     row.appendChild(removeCell);
 
                     tbody.appendChild(row);
@@ -483,12 +571,6 @@
                 table.appendChild(tbody);
                 tableDiv.appendChild(table);
             }
-        }
-
-        function showDeckSelector(cardName, cardIndex, deckCell) {
-
-            
-
         }
 
         document.getElementById("importOption").addEventListener("change", (e) => {
@@ -545,15 +627,22 @@
             const cardsOwnedArray = Object.keys(state.cardsOwned).map(cardName => {
                 const cards = state.cardsOwned[cardName];
                 return cards.map(
-                    card => 
-                    {
+                    card => {
                         var deck = null;
-                        if(card.deck)
-                        {
+                        if (card.deck) {
                             deck = getDeckById(card.deck);
                         }
                         var deckId = deck ? deck.id : "null";
-                        return `${card.name};${card.id};${deckId};${card.lang || "EN"};${card.style || "b"}`;
+                        var lang = card.lang || "EN";
+                        var set = card.set || "null";
+                        var collectorNumber = card.collectorNumber || "null";
+                        var foil = 0;
+                        if (card.foil) {
+                            if (card.foil === true) {
+                                foil = 1;
+                            }
+                        }
+                        return `${card.name};${card.id};${deckId};${lang};${set};${collectorNumber};${foil}`;
                     }
                 ).join("\n");
             }).join("\n");
@@ -561,11 +650,9 @@
             const wishListArray = Object.keys(state.wishList).map(cardName => {
                 const cards = state.wishList[cardName];
                 return cards.map(
-                    wishedCard => 
-                    {
+                    wishedCard => {
                         var deck = null;
-                        if(wishedCard.deck)
-                        {
+                        if (wishedCard.deck) {
                             deck = getDeckById(wishedCard.deck);
                         }
                         var deckId = deck ? deck.id : "null";
@@ -631,22 +718,22 @@
             }
 
             var decksCsv = null;
-            if(decksArray.length > 0){
+            if (decksArray.length > 0) {
                 decksCsv = decksArray.join("\n");
             }
             var cardsCsv = null;
-            if(cardsArray.length > 0){
+            if (cardsArray.length > 0) {
                 cardsCsv = cardsArray.join("\n");
             }
             var wishListCsv = null;
-            if(wishListArray.length > 0){
+            if (wishListArray.length > 0) {
                 wishListCsv = wishListArray.join("\n");
             }
 
-            return { 
+            return {
                 decksCsv: decksCsv,
                 cardsCsv: cardsCsv,
-                wishListCsv: wishListCsv 
+                wishListCsv: wishListCsv
             };
         }
 
@@ -654,11 +741,19 @@
             const cards = {};
             const lines = cardsCsv.split("\n").map(line => line.trim()).filter(line => line.length > 0);
             lines.forEach(line => {
-                const [name, id, deck, lang, style] = line.split(";");
+                const [name, id, deck, lang, set, collectorNumber, foil] = line.split(";");
                 const trimmedName = name?.trim();
                 if (!trimmedName) return;
                 if (!cards[trimmedName]) cards[trimmedName] = [];
-                var card = { id: parseInt(id), name: trimmedName, deck: deck ? parseInt(deck.trim()) : null || null, lang: lang?.trim() || "EN" , style: style?.trim() || "b" };
+                var card = {
+                    id: parseInt(id),
+                    name: trimmedName,
+                    deck: deck ? parseInt(deck.trim()) : null || null,
+                    lang: lang?.trim() || "EN",
+                    set: set?.trim() || null,
+                    collectorNumber: collectorNumber?.trim() || null,
+                    foil: foil ? (foil == "1" ? true : false) : false
+                };
                 if (card.deck == 'null') card.deck = null;
                 cards[trimmedName].push(card);
             });
@@ -696,16 +791,16 @@
             var imported = false;
 
             const entities = splitCsvEntities(csv);
-            if(entities.decksCsv){
+            if (entities.decksCsv) {
                 state.decks = decksFromCsv(entities.decksCsv);
             }
-            if(entities.cardsCsv){
+            if (entities.cardsCsv) {
                 state.cardsOwned = cardsFromCsv(entities.cardsCsv);
             }
-            if(entities.wishListCsv){
+            if (entities.wishListCsv) {
                 state.wishList = cardsFromCsv(entities.wishListCsv);
             }
-            
+
             if (state.cardsOwned || state.cardsOwned.length > 0) {
                 renderLibraryTable();
                 imported = true;
@@ -769,18 +864,15 @@
                 if (cardArray.length === 0) continue;
                 const filteredCards = cardArray.filter(card => {
                     var suitsFilter = false;
-                    if (deckFilter === "__ALL__") 
-                    {
+                    if (deckFilter === "__ALL__") {
                         suitsFilter = true;
-                    } 
-                    else if (deckFilter === "__NONE__") 
-                    {
+                    }
+                    else if (deckFilter === "__NONE__") {
                         suitsFilter = !card.deck;
-                    } 
-                    else
-                    {
+                    }
+                    else {
                         const deckId = card.deck;
-                        if(deckId){
+                        if (deckId) {
                             suitsFilter = deckId === parseInt(deckFilter);
                         }
                     }
@@ -811,9 +903,9 @@
                 const deckCounts = {};
                 cards.forEach(card => {
                     var deckName = "None";
-                    if(card.deck){
+                    if (card.deck) {
                         var deck = getDeckById(card.deck);
-                        if(deck){
+                        if (deck) {
                             deckName = deck.name;
                         }
                     }
@@ -821,7 +913,7 @@
                 });
 
                 const deckSummary = Object.entries(deckCounts)
-                    .map(([deckName, qty]) =>`${deckName} (${qty})`)
+                    .map(([deckName, qty]) => `${deckName} (${qty})`)
                     .join(", ");
 
                 const row = document.createElement("tr");
@@ -946,7 +1038,7 @@
                 else {
                     if (state.decks[newDeckName]) {
                         alert("Ya existe un deck con ese nombre.");
-                    } 
+                    }
                     else {
                         deck = {
                             id: Date.now(),
@@ -954,9 +1046,9 @@
                             type: deckTypeSelector.value
                         }
                         state.decks[newDeckName] = deck;
-                        if(cardId){
+                        if (cardId) {
                             var card = Object.values(state.cardsOwned).flat().find(card => card.id === cardId);
-                            if(card){
+                            if (card) {
                                 card.deck = deck.id;
                                 renderCardTable(card.name);
                                 var deckFilter = document.getElementById("deckFilter").value;
@@ -969,11 +1061,11 @@
             };
         }
 
-        function getDeckById(deckId){
+        function getDeckById(deckId) {
             return Object.values(state.decks).find(deck => deck.id === deckId);
         }
 
-        function getCardById(cardId){
+        function getCardById(cardId) {
             return Object.values(state.cardsOwned).flat().find(card => card.id === cardId);
         }
 
