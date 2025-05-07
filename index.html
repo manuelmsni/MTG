@@ -536,7 +536,7 @@
                         {
                             deck = getDeckById(card.deck);
                         }
-                        var deckId = deck ? deck.name : "null";
+                        var deckId = deck ? deck.id : "null";
                         return `${card.name};${card.id};${deckId};${card.lang || "EN"};${card.style || "b"}`;
                     }
                 ).join("\n");
@@ -552,7 +552,7 @@
                         {
                             deck = getDeckById(wishedCard.deck);
                         }
-                        var deckId = deck ? deck.name : "null";
+                        var deckId = deck ? deck.id : "null";
                         return `${wishedCard.name};${wishedCard.id};${deckId};${wishedCard.replaces || "null"}`;
                     }
                 ).join("\n");
