@@ -936,32 +936,45 @@
 
             const thead = document.createElement("thead");
             thead.innerHTML =
-                `<tr>
+    `<tr>
         <th>Card</th>
         <th>Count</th>
         <th>Decks</th>
         <th>Sets</th>
+        <th>Langs</th>
     </tr>`;
             table.appendChild(thead);
 
             const tbody = document.createElement("tbody");
 
-            const sortedCards = Object.keys(grouped).sort((a, b) => {
-                const cardA = state.cardsOwned[a][0];
-                const cardB = state.cardsOwned[b][0];
-                if (cardA.set && cardB.set) {
-                    return cardA.set.localeCompare(cardB.set) || a.localeCompare(b);
-                } else {
-                    return a.localeCompare(b);
-                }
-            });
+            var sortedCards = null;
+            
+            const sortByset = false;
 
+            if(sortByset){
+                sortedCards = Object.keys(grouped).sort((a, b) => {
+                    const cardA = state.cardsOwned[a][0];
+                    const cardB = state.cardsOwned[b][0];
+                    if (cardA.set && cardB.set) {
+                        return cardA.set.localeCompare(cardB.set) || a.localeCompare(b);
+                    } else {
+                        return a.localeCompare(b);
+                    }
+                });
+            } else {
+                //sort by id descending (date)
+                sortedCards = Object.keys(grouped).sort((a, b) => {
+                    const cardA = state.cardsOwned[a][0];
+                    const cardB = state.cardsOwned[b][0];
+                    return cardB.id - cardA.id || a.localeCompare(b);
+                });
+            }
+            
             sortedCards.forEach(cardName => {
                 const cards = grouped[cardName];
                 const count = cards.length;
                 cardsCount += count;
 
-                // Decks summary
                 const deckCounts = {};
                 cards.forEach(card => {
                     let deckName = "None";
@@ -973,11 +986,11 @@
                     }
                     deckCounts[deckName] = (deckCounts[deckName] || 0) + 1;
                 });
+
                 const deckSummary = Object.entries(deckCounts)
                     .map(([deckName, qty]) => `${deckName} (${qty})`)
                     .join(", ");
 
-                // Sets summary
                 const setCounts = {};
                 cards.forEach(card => {
                     const setName = card.set || "Unknown";
@@ -987,7 +1000,6 @@
                     .map(([setName, qty]) => `${setName} (${qty})`)
                     .join(", ");
 
-                // Build row
                 const row = document.createElement("tr");
 
                 const nameCell = document.createElement("td");
@@ -1004,10 +1016,22 @@
                 const setCell = document.createElement("td");
                 setCell.textContent = setSummary;
 
+                const langsCell = document.createElement("td");
+                const langCounts = {};
+                cards.forEach(card => {
+                    const lang = card.lang || "Unknown";
+                    langCounts[lang] = (langCounts[lang] || 0) + 1;
+                });
+                const langSummary = Object.entries(langCounts)
+                    .map(([lang, qty]) => `${lang} (${qty})`)
+                    .join(", ");
+                langsCell.textContent = langSummary;
+
                 row.appendChild(nameCell);
                 row.appendChild(countCell);
                 row.appendChild(deckCell);
                 row.appendChild(setCell);
+                row.appendChild(langsCell);
 
                 tbody.appendChild(row);
             });
